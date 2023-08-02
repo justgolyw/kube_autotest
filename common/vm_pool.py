@@ -9,11 +9,6 @@ import time
 
 DATABASE = os.environ.get("DATABASE") or 'node_pool'
 SINGLE_WORKER = 'gw99'
-CLOUD_TABLE = "cloud"
-EDGE_TABLE = "edge"
-GATEWAY_TABLE = "gateway"
-NODE_TABLE = "vm_pool"
-END_EQUIPMENT_TABLE = "end_equipment"
 
 
 class VMPoolDriver(object):
@@ -89,3 +84,77 @@ def applyNodeContainer():
         raise Exception("failed on get ip. file path: " + path + " ipData dict: " + str(ipData))
 
     return ipData[0]["ip"]
+
+
+def create_cloud_pod():
+    # 申请创建云端pod节点，并保存节点 ip 信息到指定目录
+    worker = os.environ.get("PYTEST_XDIST_WORKER") or SINGLE_WORKER
+    project_dir = "/caas/create_cloud_pod"
+    outputDir = "/caas/ips/" + worker + time.strftime("%d%H%M%S", time.localtime(time.time()))
+    cmd = '/caas/create_cloud_pod/create_pod.sh {dir} {p_dir} '.format(dir=outputDir, p_dir=project_dir)
+    ret = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", timeout=300)
+    if ret.returncode != 0:
+        raise Exception(ret)
+    path = outputDir + "/pod_ips.json"
+    ipFiles = glob.glob(path)
+    if len(ipFiles) == 0:
+        raise Exception("ip file not exist. file path: " + path)
+    with open(ipFiles[0], 'r') as f:
+        jsonStr = f.read()
+    try:
+        ipData = json.loads(jsonStr)
+    except Exception as e:
+        raise Exception("json loads err. file path: " + path + " json str: " + jsonStr)
+    print("ipDate:", ipData)
+    return ipData
+
+
+def create_edge_pod():
+    # 申请创建边端 pod节点，并保存节点 ip 信息到指定目录
+    worker = os.environ.get("PYTEST_XDIST_WORKER") or SINGLE_WORKER
+    project_dir = "/caas/create_edge_pod"
+    outputDir = "/caas/create_edge_pod/ips/" + worker + time.strftime("%d%H%M%S", time.localtime(time.time()))
+    cmd = '/caas/create_edge_pod/create_edge_pod.sh {dir} {p_dir} '.format(dir=outputDir, p_dir=project_dir)
+    ret = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", timeout=300)
+    if ret.returncode != 0:
+        raise Exception(ret)
+    path = outputDir + "/pod_ips.json"
+    ipFiles = glob.glob(path)
+    if len(ipFiles) == 0:
+        raise Exception("ip file not exist. file path: " + path)
+    with open(ipFiles[0], 'r') as f:
+        jsonStr = f.read()
+    try:
+        ipData = json.loads(jsonStr)
+    except Exception as e:
+        raise Exception("json loads err. file path: " + path + " json str: " + jsonStr)
+    return ipData
+
+
+def occupy_cloud_pods(number=1):
+    """
+    获取云端节点pods
+    """
+    ipDatas = []
+    for i in range(number):
+        try:
+            ipDatas.append(create_cloud_pod())
+        except Exception as e:
+            raise e
+    print("ipDatas:", ipDatas)
+    return ipDatas
+
+
+def occupy_edge_pods(number=1):
+    """
+    获取边端节点pods
+    """
+    ipDatas = []
+    for i in range(number):
+        try:
+            ipDatas.append(create_edge_pod())
+        except Exception as e:
+            raise e
+    print("ipDatas:", ipDatas)
+    return ipDatas
+

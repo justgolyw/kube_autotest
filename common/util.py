@@ -126,3 +126,25 @@ def sink_ip():
     ip_2 = random.randint(0, 255)
     sink_ip = '192.168.' + str(ip_1) + '.' + str(ip_2)
     return sink_ip
+
+
+class DictToObject(dict):
+    """
+    将字典转化为为对象，dict按点方式取值
+    a = {
+            "x": 123,
+            "y": "hello"
+        }
+        print(a.x)
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __getattr__(self, name):
+        value = self[name]
+        if isinstance(value, dict):
+            value = DictToObject(value)
+        elif isinstance(value, list):
+            value = [DictToObject(item) if isinstance(item, dict) else item for item in value]
+        return value

@@ -79,6 +79,7 @@ def find_condition_msg(condition_type, msg, obj):
             return True
     return False
 
+
 def retry(func, dest, timeout=60, msg='', *args, **kwargs):
     """
     重试机制
@@ -132,6 +133,7 @@ def wait_until(cb, timeout=DEFAULT_TIMEOUT, backoff=True):
     if time.time() > start_time + timeout and cb() is False:
         raise Exception('timeout waiting')
 
+
 def rtb_cb(client, rtb):
     """等待角色绑定成功"""
     def cb():
@@ -170,6 +172,7 @@ def check_resource_in_list(resource_list, resource):
             found = True
             break
     return found
+
 
 def check_data(response, expect):
     """
