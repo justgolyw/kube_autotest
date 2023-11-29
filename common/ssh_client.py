@@ -20,7 +20,9 @@ CLOUD_SSH_USER = envs.get("cloud_ssh_user", "")
 CLOUD_SSH_PWD = envs.get("cloud_ssh_pwd", "")
 EDGE_SSH_USER = envs.get("edge_ssh_user", "")
 EDGE_SSH_PWD = envs.get("edge_ssh_pwd", "")
-DOCKER_CONTAINER_COMMAND = f"docker ps | grep k8s_agent_cattle | awk '{{print $1}}' | xargs -I {{}} docker exec {{}} bash -c "
+EDGE_SSH_HOST = envs.get("edge_ssh_host", "")
+EDGE_SSH_PORT = envs.get("edge_ssh_port", 22)
+DOCKER_CONTAINER_COMMAND = f"sudo docker ps | grep k8s_agent_cattle | awk '{{print $1}}' | xargs -I {{}} sudo docker exec {{}} bash -c "
 
 
 class SSH:
@@ -62,29 +64,15 @@ class SSH:
             return [error_info, False]
         return [result, True]
 
-    # def aibox_command(self, cmd, root_password="sfedge\n", timeout=None):
-    #     """
-    #     root_password：以普通用户进入盒子后台，需要切换用户并输入密码
-    #     """
-    #     stdin, stdout, stderr = self.conn.exec_command(cmd, get_pty=True, timeout=timeout)
-    #     stdin.write(root_password)
-    #     stdin.flush()
-    #     result = stdout.read().decode('utf-8')
-    #     error_info = stderr.read().decode('utf-8')
-    #     if not result and error_info:
-    #         return [error_info, False]
-    #     return [result, True]
-
-    def aibox_command(self, cmd, timeout=None):
+    def aibox_command(self, cmd, root_password="sfedge\n", timeout=None):
         """
-        执行cmd指令
-        :param timeout:
-        :param cmd:
-        :return:
+        root_password：以普通用户进入盒子后台，需要切换用户并输入密码
         """
-        stdin, stdout, stderr = self.conn.exec_command(cmd, timeout=timeout)
-        result = stdout.read().decode('utf-8').strip()
-        error_info = stderr.read().decode('utf-8').strip()
+        stdin, stdout, stderr = self.conn.exec_command(cmd, get_pty=True, timeout=timeout)
+        stdin.write(root_password)
+        stdin.flush()
+        result = stdout.read().decode('utf-8')
+        error_info = stderr.read().decode('utf-8')
         if not result and error_info:
             return [error_info, False]
         return [result, True]
@@ -256,12 +244,30 @@ def ssh_jump(host=SSH_IP, port=SSH_PORT, username=SSH_USER, password=SSH_PWD):
     ssh_jump = SSH_JUMP(**ssh_config)
     return ssh_jump
 
+
 def exec_command(ssh_session, command):
-    # 登陆服务器后执行命令
-    exit_code = ssh_session.get_exit_code(command)
-    if exit_code != 0:
+    # 登陆服务器后执行命令，不需要输入密码
+    try:
+        ret = ssh_session.run_cmd(command)
+    except Exception as msg:
+        # exit_code = ret.exit_code
+        print(msg)
         return ["", False]
-    response = ssh_session.get_cmd_output(command)
+    response = ret.output
+    return [response, True]
+
+
+def exec_command_with_password(ssh_session, command, root_password="sfedge\n"):
+    # 登陆服务器后执行命令, 需要输入密码
+    try:
+        stdin, stdout, stderr = ssh_session.ssh_client.exec_command(command, get_pty=True)
+        stdin.write(root_password)
+        stdin.flush()
+        response = stdout.read().decode('utf-8')
+    except Exception as msg:
+        # exit_code = ret.exit_code
+        print(msg)
+        return ["", False]
     return [response, True]
 
 
@@ -337,3 +343,24 @@ def get_remote_folder(ssh_session, remote_folder, local_folder):
             get_remote_folder(ssh_session, remote_path, local_path)
         else:
             ssh_session.get(remote_path, local_path)
+
+
+"""
+一些通用的后台查询
+"""
+
+
+def get_edge_hostname(**kw):
+    cmd = "hostname"
+    with ssh_jump(**kw) as client:
+        session = client.session
+        hostname = exec_command(session, cmd)[0]
+        return hostname
+
+
+def get_cloud_hostname(**kw):
+    cmd = "hostname"
+    with ssh_jump() as client:
+        session = client.jump_session(**kw)
+        hostname = exec_command(session, cmd)[0]
+        return hostname

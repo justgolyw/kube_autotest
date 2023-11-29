@@ -78,7 +78,8 @@ class ProjectContext:
         self.project = project
         self.namespace = namespace
         self.client = client
-		
+
+
 def protect_response(r):
     if r.status_code >= 300:
         message = f'Server responded with {r.status_code}\nbody:\n{r.text}'
@@ -103,8 +104,8 @@ def cluster_and_client(cluster_id, mgmt_client):
                             token=mgmt_client.token,
                             headers={"Content-Type": "application/json"})
     return cluster, client
-	
-	
+
+
 @pytest.fixture(scope="session")
 def admin_mc():
     """Returns a ManagementContext for the default global admin user."""
@@ -128,12 +129,14 @@ def user_mc(user_factory):
     """Returns a ManagementContext for a new stander user."""
     return user_factory()
 
+
 @pytest.fixture
 def admin_cc(admin_mc):
     """Returns a ClusterContext for the local cluster for the default global admin user."""
     cluster, client = cluster_and_client('local', admin_mc.client)
     return ClusterContext(admin_mc, cluster, client)
-	
+
+
 @pytest.fixture(scope="session")
 def user_cc(admin_mc, tmp_path_factory, worker_id, remove_resource_session, request):
     """Returns a ClusterContext for the user cluster for the default global admin user."""
@@ -280,6 +283,7 @@ def user_pc(user_cc, remove_resource_session):
         rancher.Client(url=url, verify=False, token=admin_client.token,
                        headers={"Content-Type": "application/json"}))
 
+
 @pytest.fixture(scope="session")
 def user_edge_pc(user_edge_cc, remove_resource_session):
     admin_client = user_edge_cc.management.client
@@ -339,6 +343,7 @@ def user_edge_sc(user_edge_cc, admin_mc):
         rancher.Client(url=url, verify=False, token=admin_client.token,
                        headers={"Content-Type": "application/json"}))
 
+
 @pytest.fixture(scope="session")
 def user_ai_pc(admin_mc, user_edge_cc):
     admin_client = user_edge_cc.management.client
@@ -373,6 +378,7 @@ def user_default_pc(admin_mc, user_edge_cc):
         namespace,
         rancher.Client(url=url, verify=False, token=admin_client.token,
                        headers={"Content-Type": "application/json"}))
+
 
 @pytest.fixture
 def remove_resource(admin_mc, request):
@@ -444,6 +450,7 @@ def remove_resource_module(admin_mc, request):
         request.addfinalizer(clean)
 
     return _cleanup
+
 
 @pytest.fixture
 def wait_remove_resource(admin_mc, request, timeout=120):
@@ -522,6 +529,7 @@ def wait_remove_resource_module(admin_mc, request, timeout=120):
         request.addfinalizer(clean)
 
     return _cleanup
+
 
 @pytest.fixture
 def wait_remove_cluster_with_node(admin_mc, request, timeout=DEFAULT_RESOURCE_REMOVE_COMPLETE_TIMEOUT):
@@ -606,6 +614,7 @@ def wait_remove_cluster_with_node_module(admin_mc, request, timeout=DEFAULT_RESO
 
     return _cleanup
 
+
 @pytest.fixture
 def user_factory(admin_mc, remove_resource, global_roleId="user"):
     """Returns a factory for creating new users which a ManagementContext for
@@ -637,6 +646,7 @@ def user_factory(admin_mc, remove_resource, global_roleId="user"):
 
     return _create_user
 
+
 @pytest.fixture
 def get_vm_ips():
     pool = VMPoolDriver()
@@ -652,6 +662,7 @@ def get_vm_ips():
         return ips_list
 
     return _func
+
 
 def pytest_addoption(parser):
     """
@@ -714,6 +725,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
 def filter_warnings():
     import warnings
     warnings.filterwarnings("ignore")
+
 
 # 获取云端虚拟节点
 def get_cloud_pods(nums=1):
@@ -802,3 +814,26 @@ def create_edge_cluster(client, node_num: int = 1, roles: List[List[str]] = [["e
     # time.sleep(60)
     reloaded_cluster = wait_for_cluster_active(client, cluster)
     return reloaded_cluster
+
+
+@pytest.fixture
+def remove_k8s_resource(user_edge_cc, request):
+    cluster_client = user_edge_cc.client
+    cluster = user_edge_cc.cluster
+
+    def _cleanup(*resources):
+        def clean_resource(resource):
+            try:
+                url = SERVER_URL + f"/k8s/clusters/{cluster.id}{resource.metadata.selfLink}"
+                cluster_client._delete(url)
+            except ApiError as e:
+                if e.error.code != 404:
+                    raise e
+
+        def clean():
+            for resource in resources:
+                clean_resource(resource)
+
+        request.addfinalizer(clean)
+
+    return _cleanup

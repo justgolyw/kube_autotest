@@ -126,14 +126,17 @@ class RestObject(object):
                 data[k] = v
         return repr(data)
 
+    # 通过a.key获取实例对象的属性值，如果属性值是列表类型，则返回列表的方法
     def __getattr__(self, k):
         if self._is_list() and k in LIST_METHODS:
             return getattr(self.data, k)
         return getattr(self.__dict__, k)
 
+    # 通过a["key"]获取实例对象的属性值
     def __getitem__(self, key):
         return self.__dict__[key]
 
+    # 迭代实例对象的属性名，如果实例对象是列表类型，则迭代列表元素
     def __iter__(self):
         if self._is_list():
             return iter(self.data)
@@ -144,6 +147,7 @@ class RestObject(object):
                     data[k] = v
             return iter(data.keys())
 
+    # 获取实例对象的属性数量，如果实例对象是列表类型，则返回列表长度
     def __len__(self):
         if self._is_list():
             return len(self.data)
@@ -154,20 +158,28 @@ class RestObject(object):
                     data[k] = v
             return len(data)
 
+    # 判断属性是否为公共属性，即不是方法
     @staticmethod
     def _is_public(k, v):
         # callable() 函数用于检查一个对象是否可调用
         return not callable(v)
 
+    # 判断实例对象是否是列表类型
     def _is_list(self):
         return 'data' in self.__dict__ and isinstance(self.data, list)
 
+    # 将实例对象转换为字典类型，如果实例对象的属性值是 RestObject 类型，则递归转换为字典类型
     def data_dict(self):
         data = {}
         for k, v in self.__dict__.items():
-            if self._is_public(k, v):
+            if isinstance(v, RestObject):
+                data[k] = v.data_dict()
+            elif isinstance(v, list):
+                data[k] = [item.data_dict() if isinstance(item, RestObject) else item for item in v]
+            else:
                 data[k] = v
         return data
+
 
 class Schema(object):
     def __init__(self, text, obj):
@@ -397,11 +409,10 @@ class Client(object):
         return r
 
     """
-        使用object_pairs_hook和object_hook可以用于实现自定义的解码器:返回自定义的对象。
-        object_pairs_hook 的传入参数是有序的键值对表，而 object_hook 是无序的dict。
-        两个参数都给的话，object_pairs_hook 的优先级要更高。
-        """
-
+    使用object_pairs_hook和object_hook可以用于实现自定义的解码器:返回自定义的对象。
+    object_pairs_hook 的传入参数是有序的键值对表，而 object_hook 是无序的dict。
+    两个参数都给的话，object_pairs_hook 的优先级要更高。
+    """
     def _unmarshall(self, text):
         if text is None or text == '':
             return text
@@ -526,6 +537,12 @@ class Client(object):
         return self.by_id(obj.type, obj.id)
 
     def create(self, type, *args, **kw):
+        """
+        例如：
+        "links": {
+            "collection": "…/v3/users",
+            "self": "…/v3/schemas/user"
+        """
         collection_url = self.schema.types[type].links.collection
         return self._post(collection_url, data=self._to_dict(*args, **kw))
 
@@ -548,6 +565,12 @@ class Client(object):
             else:
                 raise e
 
+    """
+    _is_list, _to_value, _to_dict这三个方法都是私有方法，用于内部实现，不对外暴露。
+    它们的作用是将 RestObject 类型的对象转换为字典类型的数据，方便进行序列化和反序列化操作.
+    """
+
+    # 私有方法，判断一个对象是否为列表类型或 RestObject 类型的集合类型
     def _is_list(self, obj):
         if isinstance(obj, list):
             return True
@@ -558,6 +581,10 @@ class Client(object):
 
         return False
 
+    # 私有方法，将一个对象转换为字典类型的数据。
+    # 如果对象是字典类型，则递归调用 _to_value 方法将字典中的每个值都转换为字典类型的数据。
+    # 如果对象是列表类型，则递归调用 _to_value 方法将列表中的每个元素都转换为字典类型的数据。
+    # 如果对象是 RestObject 类型，则将 RestObject 类型的对象转换为字典类型的数据。
     def _to_value(self, value):
         if isinstance(value, dict):
             ret = {}
@@ -573,6 +600,7 @@ class Client(object):
 
         if isinstance(value, RestObject):
             ret = {}
+            # 遍历 RestObject 类型的对象的属性，通过判断 k.startswith('_') 来排除私有属性，只将公共属性转换为字典类型的数据。
             for k, v in vars(value).items():
                 if not k.startswith('_') and \
                         not isinstance(v, RestObject) and not callable(v):
@@ -583,6 +611,10 @@ class Client(object):
 
         return value
 
+    # 私有方法，用于将多个对象转换为一个字典类型的数据。
+    # 如果只有一个参数且为列表类型，则递归调用 _to_dict 方法将列表中的每个元素都转换为字典类型的数据，并返回一个字典类型的列表。
+    # 否则，将所有参数和关键字参数都转换为字典类型的数据，并返回一个字典类型的数据。
+    # 在转换参数和关键字参数时，需要递归调用 _to_value 方法将嵌套的 RestObject 类型的对象也转换为字典类型的数据。
     def _to_dict(self, *args, **kw):
         if len(kw) == 0 and len(args) == 1 and self._is_list(args[0]):
             ret = []
@@ -713,3 +745,7 @@ def _get_timeout(timeout):
         return DEFAULT_TIMEOUT
     return timeout
 
+
+if __name__ == '__main__':
+    print("This cli has been deprecated in favor of " +
+          "https://github.com/rancher/cli")
